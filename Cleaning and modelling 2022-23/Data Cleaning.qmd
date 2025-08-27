@@ -1,0 +1,295 @@
+---
+title: "Data Cleaning"
+format: html
+editor: visual
+author: "Martina Slapkova, Amar Ahmed & Matt Grant"
+---
+
+```{r setup}
+library(tidyverse)
+```
+
+## Sources
+
+| Metric | Year | Filename | Source |
+|----|----|----|----|
+| Bowel screening coverage - Persons, 60-74, screened for bowel cancer in last 30 months (2.5 year coverage, %) (indicator 92600) | 2022/23 | `bowelscreening.csv` | [Fingertips source](https://fingertips.phe.org.uk/profile/general-practice/data#page/9/gid/1938132829/pat/166/ati/7/are/M85736/iid/92600/age/280/sex/4/cat/-1/ctp/-1/yrr/1/cid/4/tbm/1) |
+| Age distribution across GP surgeries | 2022/23 | `gp_age.csv` | [Fingertips source](https://fingertips.phe.org.uk/profile/general-practice/data#page/9/gid/1938132829/pat/166/ati/7/are/M85736/iid/92600/age/280/sex/4/cat/-1/ctp/-1/yrr/1/cid/4/tbm/1) |
+| Deprivation IMD 2019, GPs (indicator: 93553) | 2022/23 | `gp_dep.csv` | [Fingertips source](https://fingertips.phe.org.uk/profile/general-practice/data#page/9/gid/2000005/pat/166/par/E38000220/ati/7/are/M85736/yrr/1/cid/4/tbm/1) |
+| Population Age Distribution | March 2023 version (to match 2022/23 data) | `gp_popdist.csv` | [NHS Digital source](https://digital.nhs.uk/data-and-information/publications/statistical/patients-registered-at-a-gp-practice/march-2023) |
+| GP practice postcode and address | 2022/23 | `gp_address.csv` | [Fingertips source](https://fingertips.phe.org.uk/profile/general-practice/data#page/9/gid/1938132829/pat/166/ati/7/are/M85736/iid/92600/age/280/sex/4/cat/-1/ctp/-1/yrr/1/cid/4/tbm/1) |
+| Patients Registered at a GP Practice | March 2023 version (to match the 2022/23 data) | `gp_size.csv` | [NHS Digital source](https://digital.nhs.uk/data-and-information/publications/statistical/patients-registered-at-a-gp-practice/april-2020) |
+| Primary care networks and sub-ICB linked to GP practice |  | `PCN sub-ICB lookup.xlsx` | [NHS Digital source](https://digital.nhs.uk/services/organisation-data-service/export-data-files/csv-downloads/gp-and-gp-practice-related-data) |
+| ONS postcode directory | May 2023 | `postcodes.csv` | [ONS Geoportal](https://geoportal.statistics.gov.uk/datasets/bd25c421196b4546a7830e95ecdd70bc/about) |
+
+Note: *The original postcode file is very large so has been reduced using the following code so it can be uploaded to the GitHub repo*
+
+``` r
+ons_postcode <- read_csv("ONSPD_May_2023_UK.csv")
+
+ons_postcode <- ons_postcode %>%
+ select(pcds, ru11ind, msoa21) %>%
+ rename("Postcode" = pcds)
+
+write_csv(ons_postcode, "postcodes.csv")
+```
+
+## Bowel Screening data
+
+Persons, 60-74, 2022/23
+
+```{r}
+bowelscreening <- read_csv("202223_rawdata/bowelscreening.csv", 
+                           show_col_types = FALSE)
+names(bowelscreening)<-gsub("\\s","",names(bowelscreening)) #tidy up column names
+
+bowelscreening_GP <- bowelscreening %>% 
+  filter(AreaType == "GPs", Timeperiod == "2022/23") %>%
+  select(ParentCode:AreaName, 
+         Value:UpperCI95.0limit, 
+         Count:Denominator) %>%
+  rename("NumberScreened" = Count, 
+         "NumberEligible" = Denominator, 
+         "pct_coverage" = Value,
+         OrgCode = AreaCode,
+         OrgName = AreaName)
+```
+
+## Age distribution
+
+```{r}
+# Population age dist source file
+PopulationAgeDistribution <- read_csv("202223_rawdata/gp_popdist.csv", show_col_types = FALSE)
+
+# gp address list
+gp_address <- read_csv("202223_rawdata/gp_address.csv", show_col_types = FALSE)
+
+#join age distribution with gp address list
+PopulationAgeDistribution <- left_join(PopulationAgeDistribution, 
+                                       gp_address, 
+                                       by = c("ORG_CODE" = "Code")) 
+
+#tidy columns
+PopulationAgeDistribution <- PopulationAgeDistribution %>%
+  rename(OrgCode = ORG_CODE, 
+         OrgName = Name, 
+         Age = AGE_GROUP_5, 
+         Value = NUMBER_OF_PATIENTS)
+
+#filter down to just gp, gp code, age band and population for age band 
+agedist <- PopulationAgeDistribution %>% 
+  filter(ORG_TYPE == "GP", SEX != "ALL") %>%
+  group_by(OrgName, OrgCode, Age) %>%
+  summarise(value = sum(Value)) %>% 
+  select(OrgCode, OrgName, Age, value)
+
+#move age band and totals to columns
+agedist_spread <- agedist %>% 
+  spread(Age, value)
+
+# creating screening-specific age group and total (60-74 for bowel screening)
+agedist_spread <- agedist_spread %>% 
+  rowwise() %>% 
+  mutate(age60_74 = sum(c(`60_64`, `65_69`, `70_74`))) %>%
+  rename(total = "ALL")
+
+agedist_spread <- agedist_spread %>% 
+  mutate(prop_6074 = age60_74 / total)
+
+#select only necessary columns
+gp_prop_age <- agedist_spread %>% 
+  select(`OrgName`, `OrgCode`, total, age60_74, prop_6074)
+
+rm(agedist, agedist_spread)
+```
+
+## Deprivation data
+
+```{r}
+## Deprivation data ----
+gp_dep <- read_csv("202223_rawdata/gp_dep.csv", show_col_types = FALSE)
+names(gp_dep)<-gsub("\\s","",names(gp_dep)) #tidy up column names
+
+gp_dep2 <- gp_dep %>% 
+  filter(Area.Type =="GPs", Time.period =="2019")  %>% #filter to GPs and 2019 deprivation
+  select(Area.Code, Area.Name, Sex, Age, Time.period, Value, Count, 
+         Denominator, Recent.Trend, Time.period.range) %>%
+  rename("Value_dep" = Value,
+         OrgCode = Area.Code,
+         OrgName = Area.Name)
+```
+
+### Joining age, deprivation and bowel screening data sets
+
+```{r}
+#combine with age distribution
+age_dep <- 
+  left_join(gp_dep2, gp_prop_age, by = c("OrgCode", "OrgName")) %>% 
+  select(OrgCode, OrgName, Value_dep, age60_74, prop_6074, total) 
+
+rm(gp_dep, gp_dep2)
+```
+
+```{r}
+#join screening info to age and deprivation info
+bowelscreen_demog <- 
+  left_join(bowelscreening_GP, age_dep, by = c("OrgCode", "OrgName")) %>%
+  rename("IMD" = Value_dep, 
+         "GPlistsize" = total) %>% 
+  select(OrgCode, OrgName, pct_coverage:GPlistsize)
+
+rm(bowelscreening, bowelscreening_GP, age_dep)
+```
+
+## Proportion of men, women and total of people aged 60-74
+
+```{r}
+#Proportion of males (taken from age distribution source)
+male_popdist <- PopulationAgeDistribution %>%
+  filter(ORG_TYPE == "GP", SEX == "MALE") %>%
+  select(`OrgCode`, `OrgName`, SEX, Age, Value) %>%
+  spread(Age, Value) %>% 
+  rowwise() %>% 
+  mutate(M_age60_74 = sum(c(`60_64`, `65_69`, `70_74`))) %>%
+  rename(M_total = "ALL") %>%
+  select(`OrgCode`, `OrgName`, SEX, M_age60_74, M_total)
+
+#Get proportion of males within the screening age only 
+male_popdist <- left_join(male_popdist, gp_prop_age, 
+                          by = c("OrgCode", "OrgName")) %>%
+  select(OrgCode:M_age60_74, age60_74) %>%
+  mutate(Prop_M_6074 = M_age60_74/age60_74)
+```
+
+### Join with main dataset
+
+```{r}
+#join male info to screening/age/dep dataset
+gp_demog_eligible <- left_join(bowelscreen_demog, male_popdist, by = c("OrgCode", "OrgName")) %>%
+  rename("age60_74" = age60_74.x) %>%
+  select(-age60_74.y)
+```
+
+## GP Address info
+
+```{r}
+#Add address info 
+gp_address <- gp_address %>% 
+  rename ("OrgCode" = "Code",
+          "OrgName" = Name)
+```
+
+### Join with main dataset
+
+```{r}
+gp_demog_eligiblelist <- left_join(gp_demog_eligible, gp_address, by = c("OrgCode", "OrgName"))
+
+rm(bowelscreen_demog, gp_demog_eligible, gp_address)
+```
+
+## Ethnicity data
+
+```{r}
+# Ethnicity data ----
+ethnicity_msoa <- read_csv("202223_rawdata/ethnicity_msoa.csv",
+                           show_col_types = FALSE)
+ethnicity_msoa <- ethnicity_msoa[1:7264, ] #remove end of file rows
+
+# calculate white ethnicity as a proportion of total
+ethnicity_msoa_select <- ethnicity_msoa %>%
+  rename(
+    "msoa21name" = `2021 super output area - middle layer`, 
+    "msoa21" = mnemonic, 
+    "ethnic_denom" = `Total: All usual residents`,
+    "ethnic_whitebrit" = White
+  ) %>%
+  mutate(ethnic_whitebrit_perc=(ethnic_whitebrit/ethnic_denom)*100) %>%
+  select(msoa21name, msoa21, ethnic_denom, ethnic_whitebrit, ethnic_whitebrit_perc)
+
+rm(ethnicity_msoa)
+```
+
+### Join with main dataset
+
+```{r}
+# Postcode list 
+ons_postcode <- read_csv("202223_rawdata/postcodes.csv",
+                         show_col_types = FALSE) %>%
+  rename_all(function(x) gsub(" ", "", x))
+
+#add msoa to data set
+dataset_msoa <- left_join(gp_demog_eligiblelist, ons_postcode, by = "Postcode")
+#add ethnicity to data set
+dataset_all <- left_join(dataset_msoa, ethnicity_msoa_select, by = "msoa21") %>%
+  rename("listsize2020" = "GPlistsize") 
+```
+
+## Rural urban split descriptors
+
+```{r}
+# Rural/urban classifications 
+ruc11desc_table <- read_csv("202223_rawdata/ru11ind_desc.csv",
+                            show_col_types = FALSE) %>%
+  rename_all(function(x) gsub(" ", "", x))
+```
+
+### Join with main dataset
+
+```{r}
+# add rural urban classification
+dataset_all <- left_join(dataset_all, ruc11desc_table, by = "ru11ind") 
+
+rm(ons_postcode, gp_demog_eligiblelist, #postcode_msoa, 
+   dataset_msoa, ethnicity_msoa_select, ruc11desc_table)
+rm(gp_prop_age, male_popdist, PopulationAgeDistribution)
+```
+
+## PCN and ICB groupings
+
+```{r}
+# PCN to ICB lookup table 
+PCN_ICB_lookup <- readxl::read_excel("202223_rawdata/PCN sub-ICB lookup.xlsx",
+                                     sheet = "PCN Core Partner Details") %>%
+  rename(OrgCode = 1,
+         OrgName = 2,
+         SubICBCode = 3,
+         SubICBName = 4,
+         PCNCode = `PCN Code`,
+         PCNName = `PCN Name`,
+         PCN_SubICBCode = 7,
+         PCN_SubICBName = 8,
+         StartDate = 9,
+         EndDate = 10,
+         GP_PCN_shareSubICB = 11) %>%
+  mutate(ICB = str_split_i(SubICBName, " - ", 1)) #Extract ICB name from sub-ICB name
+
+PCN <- PCN_ICB_lookup %>%
+  select(OrgCode, OrgName, ICB, SubICBCode, SubICBName, PCNCode, PCNName, StartDate, EndDate) %>%
+  mutate(StartDate = as.Date(StartDate, "%Y%m%d"),
+         EndDate = as.Date(EndDate, "%Y%m%d")) %>%
+  filter((StartDate < as.Date("2022/04/01", "%Y/%m/%d") & EndDate >= as.Date("2023/05/01", "%Y/%m/%d")) 
+         |(StartDate < as.Date("2023/04/01", "%Y/%m/%d") & is.na(EndDate) == TRUE))
+```
+
+### Join with main dataset
+
+```{r}
+#join onto dataset
+dataset_all <- left_join(dataset_all, PCN, by = c("OrgCode")) %>%
+  select(-OrgName.y, -StartDate, -EndDate) %>%
+  rename(OrgName = OrgName.x) 
+
+rm(PCN_ICB_lookup, PCN)
+```
+
+## Output cleaned data
+
+```{r}
+#change proportions to whole number %s
+dataset_all <- dataset_all %>%
+  mutate(prop_6074 = prop_6074 * 100,
+         Prop_M_6074 = Prop_M_6074 * 100) %>%
+  select(-SEX)
+
+write_csv(dataset_all, "Cleaned dataset.csv")
+```

@@ -1,0 +1,13 @@
+name: GPBowelScreeningTool
+title: GPBowelScreeningTool
+username: crukcancerintelligence
+account: crukcancerintelligence
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 14398448
+bundleId: 10612984
+url: https://crukcancerintelligence.shinyapps.io/GPBowelScreeningTool/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: ga-code.html|Model prediction contributions.csv

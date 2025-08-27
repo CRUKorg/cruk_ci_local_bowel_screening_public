@@ -1,0 +1,10 @@
+---
+output: 
+  html_fragment
+---
+
+If you have any questions regarding the data or the interpretation of this data, or if you are having any issues with the website please contact:\
+[stats.team\@cancer.org.uk](mailto:stats.team@cancer.org.uk){.email}\
+(please allow 10 working days for a response)
+
+[See our complete statistics pages on cancerresearch.org](https://www.cancerresearchuk.org/health-professional/cancer-statistics-for-the-uk)

@@ -1,0 +1,159 @@
+---
+title: "Data Modelling and Output"
+format: html
+editor: visual
+---
+
+```{r setup}
+library(lme4)
+library(binom)
+library(tidyverse)
+```
+
+## Load and scale
+
+For the model to work properly, we need to scale each metric first.
+
+```{r}
+Data <- read_csv("Cleaned dataset.csv", 
+                 show_col_types = FALSE)
+
+# scale each metric in preparation for modelling
+Data$ethnic_whitebrit_perc_scale <- scale(Data$ethnic_whitebrit_perc)
+Data$prop_6074_scale <- scale(Data$prop_6074)
+Data$Prop_M_6074_scale <- scale(Data$Prop_M_6074)
+Data$IMD_scale <- scale(Data$IMD)
+Data$listsize2020_scale <- scale(Data$listsize2020)
+Data$ru11ind <- factor(Data$ru11ind)
+
+datscale <- na.omit(Data)
+```
+
+## Create the model
+
+#### ICB or PCN as the random effect?
+
+After talks with GPs and cancer alliance leaders, they told us that PCN may be a better grouping than ICB. This is because there are likely to be more shared characteristics amongst PCNs than amongst ICBs.
+
+One result of this change is that with PCN we see around half as many practice areas that are sig diff. (around 700 when using ICB in the model, around 300 when using PCN).
+
+I think that the number of practice areas within each PCN is too low for the model assumptions and so we are going to stick with ICB as the random effect.
+
+### Rural/urban split
+
+In the initial model A1 is the reference variable for the rural urban indicator. This has impacts on how we interpret the outputs of the model and how we phrase takeaway messages.
+
+From the [ONS rural/urban classification user guide](https://www.ons.gov.uk/methodology/geography/geographicalproducts/ruralurbanclassifications/2011ruralurbanclassification), C1 is the most common category across the UK. However, within our dataset, the most common is A1, presumably because these areas are more built up and have a larger population so it would follow that there are more GP practices there.
+
+For now we will use C1, because I think being able to compare to the most common category in the UK is likely the most useful in terms of takeaway messaging.
+
+```{r}
+#set reference level for ru11
+datscale <- datscale %>%
+  mutate(ru11ind = relevel(ru11ind, ref = "C1"))
+
+#Model with sub-ICB
+mod <- glmer(NumberScreened ~
+               IMD_scale + Prop_M_6074_scale + prop_6074_scale + 
+               listsize2020_scale + ru11ind + ethnic_whitebrit_perc_scale +
+               (1|ICB),
+               # (1|PCNName),
+             offset = log(NumberEligible), 
+             family = poisson, 
+             data = datscale,
+             nAGQ = 0,
+             glmerControl(optimizer = "bobyqa", 
+                          optCtrl = list(maxfun=2e9)))
+VarCorr(mod)
+
+```
+
+## Predicting screening via the model
+
+```{r}
+datscale$Expected <- predict(mod, type = "response")
+#Have to round because the binom.test function will only accept integers
+datscale$Expected <- round(datscale$Expected)
+```
+
+## Calculate CIs
+
+```{r}
+datscale <- datscale %>%
+  mutate(NumberScreened_LowerCI = binom.confint(datscale$NumberScreened,
+                                                datscale$NumberEligible, 
+                                                conf.level = 0.95, 
+                                                methods = "exact")$lower * NumberEligible,
+         NumberScreened_UpperCI = binom.confint(datscale$NumberScreened,
+                                                datscale$NumberEligible, 
+                                                conf.level = 0.95, 
+                                                methods = "exact")$upper * NumberEligible,
+         Expected_LowerCI = binom.confint(datscale$Expected,
+                                          datscale$NumberEligible, 
+                                          conf.level = 0.95, 
+                                          methods = "exact")$lower * NumberEligible,
+         Expected_UpperCI = binom.confint(datscale$Expected,
+                                          datscale$NumberEligible, 
+                                          conf.level = 0.95, 
+                                                methods = "exact")$upper * NumberEligible)
+```
+
+## Calculate the standardised screening ratio
+
+```{r}
+# Calculate point estimate for the ratio
+datscale <- datscale %>%
+  mutate(SSRatio = NumberScreened / Expected,
+         SSRatioLowerCI = NumberScreened_LowerCI / Expected_UpperCI,
+         SSRatioUpperCI = NumberScreened_UpperCI / Expected_LowerCI)
+```
+
+## Tidying up data
+
+```{r}
+# Adding calculated columns
+datscale <- datscale %>% 
+  mutate(IMD_decile = ntile(desc(IMD), 10),
+    IMD_quintile = ntile(desc(IMD), 5))
+
+datscale <- datscale %>% 
+  rename (OrganisationCode = OrgCode, 
+          OrganisationName = OrgName, 
+          gp_listsize = listsize2020) #%>% 
+
+# Creates a column with significance descriptions
+datscale <- datscale %>%
+  mutate(signif_change = case_when(SSRatioUpperCI < 1 ~ "lower",
+                                   SSRatioLowerCI > 1 ~ "higher",
+                                   .default = "similar")
+  ) %>%
+  arrange(ICB, OrganisationName)
+
+#Fix ICB name formatting
+datscale$ICB <- datscale$ICB %>%
+  #extract name without "NHS" or "ICB"
+  str_split_i(., "NHS ", 2) %>%
+  str_split_i(., "ICB", 1)  %>%
+  str_to_title() %>%
+  str_replace_all(., "And", "and") %>%
+  paste0("NHS ", ., "ICB") 
+
+#Add coverage and pred coverage percentages
+datscale <- datscale %>%
+  mutate(Coverage = NumberScreened / NumberEligible,
+         PredictedCoverage = Expected / NumberEligible) %>%
+  group_by(ICB) %>%
+  #Calculate ICB coverage average for use in app graphs
+  mutate(ICBCoverageAvg = mean(NumberScreened)/mean(NumberEligible)) %>%
+  ungroup()
+```
+
+## Output
+
+```{r}
+# path for app data
+write.csv(datscale,"C:/RProjects/cruk_ci_local_bowel_screening_tool/Cleaning and modelling 2022-23/FinalBowelScreeningData22_23.csv",
+          row.names=F)
+```
+
+## 

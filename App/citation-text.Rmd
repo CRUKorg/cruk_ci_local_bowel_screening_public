@@ -1,0 +1,6 @@
+---
+output: 
+  html_fragment
+---
+
+You are welcome to reuse this Cancer Research UK-produced content for your own work. Please remember to acknowledge the original data sources for each chart and ensure you retain the CRUK logo in the image. Please note that due to differences in data collection, comparison of performance should not be made between nations.

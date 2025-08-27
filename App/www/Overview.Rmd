@@ -1,0 +1,7 @@
+Data is reported according to the GP practice at which people invited for screening are registered. We then use this as a proxy for other information, such as where people live or the level of deprivation in their area, but this does not imply that screening coverage is the sole responsibility of the GP practice.
+
+This tool can help identify populations where screening coverage is higher, lower or similar to the level that their socio-demographics would predict, and therefore help systems identify the right strategies to increase screening coverage in those areas. It can also provide an idea of where systems may want to target resources when used in conjunction with local knowledge.
+
+The predictions made by this tool are separate from how a GP practice area's coverage or uptake may compare to national targets, and it is important to consider both when making practical decisions.
+
+To see how a single GP practice area compares to our predictions, see the GP Focus section below.
