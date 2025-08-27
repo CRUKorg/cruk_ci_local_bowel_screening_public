@@ -58,7 +58,7 @@ ui <- page_navbar(
   
   # general themeing variables ----
   theme = bs_add_variables( 
-    bs_theme(version = 5, brand = TRUE),
+    bs_theme(version = 5, primary = "#e60078"),
     "min-contrast-ratio"	= 3,
     'popover-max-width'	= '650px',
     'popover-font-size'	= '16px',
@@ -127,9 +127,10 @@ ui <- page_navbar(
                               border: black 2px solid;",
                     h2("Tool data export"),
                     p("This tool would not be possible without public data and so we think it is only fair that we make our outputs available to use as well. If you would like to use the results from our modelling in another project or piece of work you may download it as a .csv file. If you do so, please cite Cancer Research UK as the source."),
+                    p("Full workings and code for this app can be found on our", a(icon("github"), "GitHub repository", href = "https://github.com/CRUKorg/cruk_ci_local_bowel_screening_public")),
                     span(style = "display: flex; justify-content: flex-end;",
                          downloadButton(style = " margin-top: 5px;
-                                                  background: #ff0087;
+                                                  background: #e60078;
                                                   color: white;
                                                   border-radius: 0;",
                                         outputId = "download_button", 

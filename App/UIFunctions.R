@@ -40,11 +40,11 @@ hpNextReview <- function(last_review_date, next_review_date) {
 # Formatted title with horizontal rule ----
 crukTitleHR <- function(Title, Subheading = '') {
   div(h1(Title, 
-         style = "font-family: Progress Medium;
+         style = "font-family: Progress Medium, sans-serif;
                   margin: 0px;"),
       span(Subheading,
            class = "subheading",
-           style = "font-family: Poppins;
+           style = "font-family: Poppins, sans-serif;
                   margin: 28px 0px 0px 0px;"),
       hr(style = "width: 4rem;
                   height: 0.5rem;
@@ -60,18 +60,18 @@ crukFooter <- function() {
           style = "padding: 16px 48px 16px 48px; border: 2px solid black; margin-bottom: 32px; margin-top: 32px;",
           #CRUK logo
           div(a(img(src = "cruk-logo.svg", 
-                  class = 'cruk-logo',
-                  style = "margin: 8px; margin-bottom: 16px; height: 60px;"), 
-              href = "https://www.cancerresearchuk.org/")),
+                    class = 'cruk-logo-footer',
+                    style = "margin: 8px; margin-bottom: 16px; height: 60px;"), 
+                href = "https://www.cancerresearchuk.org/")),
           bslib::layout_column_wrap(width = 1/2,
-                                    div(includeMarkdown('email-site-text.Rmd')),
-                                    div(includeMarkdown('citation-text.Rmd'))
-                                    ),
+                                    div(includeMarkdown('./citation-text.Rmd')),
+                                    div(includeMarkdown('./email-site-text.Rmd'))
+          ),
           
       ),
       
       hr(style = "opacity: 1;
-                  margin-right: calc(50% - 50vw) !important;
+                  margin-right: calc(50% - 49.5vw) !important;
                   border: 0;
                   border-color: #000000;
                   border-style: solid;
@@ -80,7 +80,22 @@ crukFooter <- function() {
                   width: auto;"),
       h3("Together we are", br(), 
          " beating cancer",
-         style = "padding-top: 16px;"),
+         style = "padding-top: 16px; padding-bottom: 40px"),
+      div(class = "terms-and-conditions",
+          div(style = "terms-and-conditions-list",
+              tags$ul(class = "terms-and-conditions-list",
+                      tags$li(div(a(span("Terms and conditions", style = "font-size: 0.875rem"),
+                                    href = "https://www.cancerresearchuk.org/terms-and-conditions"))),
+                      tags$li(div(a(span("Privacy", style = "font-size: 0.875rem"),
+                                    href = "https://www.cancerresearchuk.org/about-us/our-organisation/privacy-statement"))),
+                      tags$li(div(a(span("Modern slavery statement", style = "font-size: 0.875rem"),
+                                    href = "https://www.cancerresearchuk.org/about-us/our-organisation/responsible-organisation"))),
+                      tags$li(div(a(span("Cookies", style = "font-size: 0.875rem"),
+                                    href = "https://www.cancerresearchuk.org/terms-and-conditions/cookies-policy")))
+              )
+              
+          ),
+      ),
       a(
         img(src = "logo-fundraising-regulator-reg.svg", 
             height = "97px", 
@@ -89,6 +104,41 @@ crukFooter <- function() {
       tags$address("Cancer Research UK is a registered charity in England and Wales (1089464), Scotland (SC041666), the Isle of Man (1103) and Jersey (247). A company limited by guarantee. Registered company in England and Wales (4325234) and the Isle of Man (5713F). Registered address: 2 Redman Place, London, E20 1JQ.")
   )
 }
+# crukFooter <- function() {
+#   div(class = "central-column",
+#       div(class = "info-footer",
+#           style = "padding: 16px 48px 16px 48px; border: 2px solid black; margin-bottom: 32px; margin-top: 32px;",
+#           #CRUK logo
+#           div(a(img(src = "cruk-logo.svg", 
+#                   class = 'cruk-logo',
+#                   style = "margin: 8px; margin-bottom: 16px; height: 60px;"), 
+#               href = "https://www.cancerresearchuk.org/")),
+#           bslib::layout_column_wrap(width = 1/2,
+#                                     div(includeMarkdown('email-site-text.Rmd')),
+#                                     div(includeMarkdown('citation-text.Rmd'))
+#                                     ),
+#           
+#       ),
+#       
+#       hr(style = "opacity: 1;
+#                   margin-right: calc(50% - 50vw) !important;
+#                   border: 0;
+#                   border-color: #000000;
+#                   border-style: solid;
+#                   border-bottom-width: 0.25rem;
+#                   margin: 0px;
+#                   width: auto;"),
+#       h3("Together we are", br(), 
+#          " beating cancer",
+#          style = "padding-top: 16px;"),
+#       a(
+#         img(src = "logo-fundraising-regulator-reg.svg", 
+#             height = "97px", 
+#             style = "margin-right: 10px; height: 51px; margin-top: 16px; margin-bottom: 16px;"), 
+#         href = "https://www.fundraisingregulator.org.uk/"),
+#       tags$address("Cancer Research UK is a registered charity in England and Wales (1089464), Scotland (SC041666), the Isle of Man (1103) and Jersey (247). A company limited by guarantee. Registered company in England and Wales (4325234) and the Isle of Man (5713F). Registered address: 2 Redman Place, London, E20 1JQ.")
+#   )
+# }
 
 # Page contents box -----
 onThisPage <- function(...) {
@@ -126,7 +176,7 @@ onThisPage <- function(...) {
     style = "background: #f0f0ff; padding:1.5rem; margin: 0; margin-bottom: 12px;",
     tags$link(href = "https://fonts.googleapis.com/icon?family=Material+Icons", rel = "stylesheet"),
     div(
-      style = "font-size: 1.5rem; padding-bottom: 0.8rem; margin: 0px; font-family: 'Progress Medium';",
+      style = "font-size: 1.5rem; padding-bottom: 0.8rem; margin: 0px; font-family: 'Progress Medium', sans-serif;",
       "On this page"
     ),
     do.call(tagList, links)
@@ -148,7 +198,7 @@ crukValueBox <- function(id, title= "", value = "", icon = "",
                  margin-top: 5px; 
                  margin-bottom: 5px;
                  opacity: 1;")),
-    value = span(value, style = "font-family: Progress Medium;"),
+    value = span(value, style = "font-family: Progress Medium, sans-serif;"),
     showcase_layout = showcase_left_center(width = 0.25),
     showcase = span(icon, 
                     style = paste0("font-size: 3rem !important; 

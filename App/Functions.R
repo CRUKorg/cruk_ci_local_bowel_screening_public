@@ -140,7 +140,7 @@ crukLogoPreference <- list(
 #Coverage graph ----
 Coverage_graph <- function(ICBData, order, chosenGP, chosenPCN) {
   # Set palette colours
-  pal <- c("#ff0087", "#bbc7d9", "#009cee")
+  pal <- c("#e60078", "#bbc7d9", "#009cee")
   
   # Set colour names, will appear on legend
   pal <- setNames(pal, c("lower", "similar", "higher"))
@@ -290,7 +290,7 @@ Coverage_graph <- function(ICBData, order, chosenGP, chosenPCN) {
       add_bars(data = ChosenGPData,
                x = ~Id,
                y = ~Coverage,
-               marker = list(color = ~I(case_when(signif_change == 'lower' ~ '#ff0087',
+               marker = list(color = ~I(case_when(signif_change == 'lower' ~ '#e60078',
                                                   signif_change == 'similar' ~ '#bbc7d9',
                                                   signif_change == 'higher' ~ '#009cee')),
                              line = list(color = '#000000',
@@ -450,7 +450,7 @@ ICB_graph <- function(ICBData, order, chosenGP, chosenPCN) {
   }
   
   #Set colours and assign them to variables
-  pal <- c("#ff0087", "#bbc7d9", "#009cee")
+  pal <- c("#e60078", "#bbc7d9", "#009cee")
   pal <- setNames(pal, c("lower", "similar", "higher"))
   
   
@@ -537,7 +537,7 @@ ICB_graph <- function(ICBData, order, chosenGP, chosenPCN) {
       add_bars(data = chosenGPData,
                x = ~Id,
                y = ~SSRfrom1,
-               marker = list(color = ~I(case_when(signif_change == 'lower' ~ '#ff0087',
+               marker = list(color = ~I(case_when(signif_change == 'lower' ~ '#e60078',
                                                   signif_change == 'similar' ~ '#bbc7d9',
                                                   signif_change == 'higher' ~ '#009cee')),
                              line = list(color = '#000000',
@@ -669,7 +669,7 @@ GPText <- function(GPData) {
                 The bowel screening coverage for this practice area is ", 
               case_when(GPData$signif_change == "similar" ~ paste0("<strong>", GPData$signif_change, "</strong>", " to"), 
                         GPData$signif_change == "higher" ~ paste0("<span style = 'color: #009cee;'><strong> significantly ", GPData$signif_change, "</strong></span> than"), 
-                        GPData$signif_change == "lower" ~ paste0("<span style = 'color: #ff0087;'><strong> significantly ", GPData$signif_change, "</strong></span> than")), 
+                        GPData$signif_change == "lower" ~ paste0("<span style = 'color: #e60078;'><strong> significantly ", GPData$signif_change, "</strong></span> than")), 
               " our model's prediction for this practice area. In other words, 
                 similar patient populations to this practice area would usually have 
                 a ", case_when(GPData$signif_change == "similar" ~ paste0("similar"), 
@@ -688,7 +688,7 @@ GPText <- function(GPData) {
 
 GP_graph <- function(GPData) {
   bar_colour <- case_when(GPData$signif_change == "higher" ~ "#009cee",
-                          GPData$signif_change == "lower" ~ "#ff0087",
+                          GPData$signif_change == "lower" ~ "#e60078",
                           GPData$signif_change == "similar" ~ "#bbc7d9")
   error_bar_colour <- case_when(GPData$signif_change == "higher" ~ "#5bc5f2", #"#009cee",
                                 GPData$signif_change == "lower" ~ "#ff99cf", #"#878787",

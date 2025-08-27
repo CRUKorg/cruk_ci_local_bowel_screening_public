@@ -119,7 +119,7 @@ module_0_Tool_TabUI <- function(id, GPScreen) {
                              style = "float: right; 
                                        margin-top: 5px; 
                                        font-size: 12px; 
-                                       background: #ff0087; 
+                                       background: #e60078; 
                                        color: white"
                 )
             )
@@ -213,11 +213,11 @@ module_0_Tool_TabUI <- function(id, GPScreen) {
                                                     {Upper\\ confidence\\ interval\\ for\\ the\\ predicted\\ number\\ screened}
                                                 > 1
                                           $$"),
-                                HTML("<li><p><span style='color: #ff0087;'><strong>
+                                HTML("<li><p><span style='color: #e60078;'><strong>
                                     Significantly lower
                                     </strong></span>
                                     have screened a statistically significant number of people 
-                                    <span style='color: #ff0087;'><strong>
+                                    <span style='color: #e60078;'><strong>
                                     less
                                     </strong></span> 
                                     than predicted.
@@ -312,14 +312,14 @@ module_0_Tool_TabServer <- function(id, GPScreen, DemoFactors, parent) {
         if(sum(selectedICB()$signif_change == "lower") == 1) {
           paste0(sum(selectedICB()$signif_change == "lower"), 
                  " practice area performing 
-                 <span style = 'color: #ff0087;'>
+                 <span style = 'color: #e60078;'>
                  significantly lower
                  </span> 
                  than predicted")
         } else {
           paste0(sum(selectedICB()$signif_change == "lower"), 
                  " practice areas performing 
-                 <span style = 'color: #ff0087;'>
+                 <span style = 'color: #e60078;'>
                  significantly lower
                  </span> 
                  than predicted")
