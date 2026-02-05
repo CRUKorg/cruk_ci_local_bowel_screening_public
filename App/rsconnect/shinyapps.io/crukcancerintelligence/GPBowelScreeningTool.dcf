@@ -5,7 +5,7 @@ account: crukcancerintelligence
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 14398448
-bundleId: 10825448
+bundleId: 11542270
 url: https://crukcancerintelligence.shinyapps.io/GPBowelScreeningTool/
 version: 1
 asMultiple: FALSE
