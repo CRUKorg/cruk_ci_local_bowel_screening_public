@@ -1,0 +1,74 @@
+
+
+
+<div id="methodology" class="section level2">
+<h2>Methodology</h2>
+<p>This tool evaluates the impact of various socio-demographic and
+practice-related factors on screening coverage across England. It
+estimates expected screening coverage for GP practice populations,
+accounting for socio-demographic factors such as deprivation, age,
+gender, ethnicity, rurality, and practice size.</p>
+<p>A multivariate Poisson mixed effect regression model is used to
+identify how these socio-demographic factors influence screening
+coverage. Additionally, the tool computes a Standardised Screening Ratio
+(SSR), which compares the observed number of screened individuals to the
+expected adjusted for these confounded factors. This allows for the
+identification of areas (practices) with lower-than-expected uptake,
+even after accounting for demographic differences.</p>
+</div>
+<div id="data-used" class="section level2">
+<h2>Data used</h2>
+<p>Data used in the statistical analysis were extracted for the
+financial year 2024/25 in England (or the latest available time period
+available for each dataset). GP practices for which any of the data
+below is not available will not be included in the primary analysis
+modelling.</p>
+<p>The number of people eligible for bowel screening aged 60-74 and the
+number of those who took part in bowel screening in the last 30 months
+were extracted for each GP practice. Deprivation scores from the Indices
+of Multiple Deprivation 2025 for GP practices were extracted from the
+Office of Health Improvement &amp; Disparities Public Health Data
+Fingertips System. Ethnic groups and MSOA codes were extracted from the
+Ethnicity by Middle Super Output Layer (MSOA) dataset and associated
+with each GP practice via its postcode, using postcode-MSOA mapping​​.
+Rurality group of the GP practice’s own postcode was directly extracted
+from the Office for National Statistics’ Rural Urban Classification. Six
+categories make up the system, ranging from Urban (major conurbations
+and smaller towns) through to Rural Sparse and Rural Not Sparse
+settings.</p>
+<p>Number of patients registered at a GP practice by age group were
+extracted from the NHS Digital dataset of Patients Registered at a GP
+Practice, March 2025​​. Number of people aged 60-74 provided information
+about age distribution in each practice, while proportion of males aged
+60-74 served as an indicator of sex.</p>
+<p>Practices are assigned to the Primary Care Network (PCN) they were in
+on 31 March 2025. If a practice was not in a PCN then, its closest
+available PCN record is used (its current PCN, or otherwise its most
+recent one). Some practices are in no PCN, as membership is voluntary,
+and are labelled “Not in a PCN”. PCNs are shown for comparison only; the
+model uses ICBs, which every practice has.</p>
+</div>
+<div id="analysis" class="section level2">
+<h2>Analysis</h2>
+<p>A multivariate Poisson mixed effect regression model was performed
+with the number of persons screened as an outcome. The fixed effect
+predictors were deprivation score, proportion of males aged 60-74,
+proportion of practice population aged 60-74, practice population list
+size, rural/urban classification, and proportion of people who were of
+White British ethnicity. ICB groups were used as a random effect to
+account for the potential correlation among observations within the same
+ICB, potentially due to similar operational and healthcare delivery
+environments. The number of eligible people (number invited) was used as
+an offset. </p>
+<p>A Standardised Screening Ratio (SSR) was calculated as the ratio of
+the observed number (O) of individuals screened to the expected number
+(E) of individuals screened. The expected number (E) is estimated using
+a multivariate Poisson mixed-effects regression model, which
+incorporates adjustments for available confounding factors. This
+approach ensures that the SSR is standardised, taking into account the
+influence of the confounding factors within the context of the
+mixed-effects model. The 95% confidence interval for the SSR was
+calculated by dividing the lower (upper) 95% exact binomial confidence
+limit for the number screened by the upper (lower) 95% exact binomial
+confidence limit for the expected number. </p>
+</div>

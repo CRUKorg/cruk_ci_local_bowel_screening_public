@@ -1,33 +1,27 @@
-# Cancer Research UK local bowel screening tool
+# Local Bowel Screening Tool
 
-This repository contains a public snapshot of the [**local bowel screening tool**](https://crukcancerintelligence.shinyapps.io/LocalBowelScreeningTool/), developed by the Cancer Intelligence team at [Cancer Research UK](https://www.cancerresearchuk.org/). The app is designed to support analysis and visualisation of local-level bowel screening data in England.
+Cancer Research UK's tool showing bowel screening coverage by GP practice in England
 
-## What This Tool Does
+Live tool: https://crukcancerintelligence.shinyapps.io/GPBowelScreeningTool/
 
-This tool explores how **socio-demographic factors may affect bowel screening coverage** across England.
+## Repository
+- shiny_app/ - the R shiny app (includes the data it reads)
+- scripts/01_clean_data.R - builds the dataset from the raw sources
+- scripts/02_fit_model.qmd - fits the model
+- data/processed/ - practice-level outputs
+- docs/ methodology, data sources, update checklist
 
-It compares **predicted coverage estimates** based on local socio-demographic characteristics with **actual screening coverage** at the GP practice level. 
+Raw data is not included. Download it from the sources listed in docs/SOURCES.md and place it in data/raw before running the scripts.
 
-The data is reported by the GP practice where individuals are registered for screening. While this is used as a proxy for other factors (such as where people live or the level of deprivation in their area), it does **not imply that screening coverage is the sole responsibility of the GP practice**.
+## License and acknowledgement
+Contains public sector information licensed under the Open Government Licence v3.0.
 
-## How It Can Be Used
+Contains OS data © Crown copyright and database right 2026.
 
-This tool can support local systems by:
+Contains Royal Mail data © Royal Mail copyright and database right 2026.
 
-- Highlighting populations where screening coverage may be influenced by socio-demographic factors.
-- Helping identify where **targeted interventions** or **resource allocation** may be most effective.
-- Supporting local knowledge with data-driven insights.
+Source: Office for National Statistics licensed under the Open Government Licence v.3.0.
 
-It is designed to complement, not replace, other performance measures such as national targets for coverage or uptake.
-
-## Built with
-This tool was built in R using Shiny, and relies on a multivariate Poisson mixed effect regression model with the lme4 package.
-
-## Data and Reuse
-You are welcome to reuse this Cancer Research UK–produced content for your own work. Please:
-
- - Acknowledge the original data sources.
- - Credit Cancer Research UK
-
-## Contact
-If you have any questions regarding the data or its interpretation, or if would like to implement the methodology in similar work, please contact Matt Grant via stats.team@cancer.org.uk
+Office for Health Improvement and Disparities. Public health profiles. 2026 https://fingertips.phe.org.uk/ © Crown copyright 2026. Accessed 2 November 2026.
+You are welcome to reuse this work with acknowledgement to Cancer Research UK.
+cancerintelligence@cancer.org.uk

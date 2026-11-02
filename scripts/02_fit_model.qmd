@@ -1,0 +1,468 @@
+---
+title: "Data Modelling and Output"
+format: html
+editor: visual
+---
+
+```{r setup}
+library(lme4)
+library(binom)
+library(tidyverse)
+library(plotly)
+
+format_icb <- function(x) {
+  x %>% 
+    str_split_i(., "NHS ", 2) %>%
+    str_split_i(., "ICB", 1) %>%
+    str_to_title() %>%
+    str_replace_all(., "And", "and") %>%
+    paste0("NHS ", ., "ICB")
+}
+```
+
+## Load and scale
+
+For the model to work properly, we need to scale each metric first.
+
+```{r}
+Data <- read_csv("../data/processed/cleaned_dataset.csv", 
+                 show_col_types = FALSE)
+
+# scale each metric in preparation for modelling
+Data$ethnic_whitebrit_perc_scale <- as.numeric(scale(Data$ethnic_whitebrit_perc))
+Data$prop_6074_scale <- as.numeric(scale(Data$prop_6074))
+Data$Prop_M_6074_scale <- as.numeric(scale(Data$Prop_M_6074))
+Data$IMD_scale <- as.numeric(scale(Data$IMD))
+Data$listsize2020_scale <- as.numeric(scale(Data$listsize2020))
+Data$ru21ind <- factor(Data$ru21ind)
+
+model_cols <- c("NumberScreened", "NumberEligible", "IMD_scale", "Prop_M_6074_scale", "prop_6074_scale", "listsize2020_scale", "ru21ind", "ethnic_whitebrit_perc_scale", "ICB")
+datscale <- Data[complete.cases(Data[, model_cols]), ]
+cat(nrow(Data) - nrow(datscale), 'practices dropped for missing values\n')
+```
+
+## Create the model
+
+#### ICB or PCN as the random effect?
+
+After talks with GPs and cancer alliance leaders, they told us that PCN may be a better grouping than ICB. This is because there are likely to be more shared characteristics amongst PCNs than amongst ICBs.
+
+One result of this change is that with PCN we see around half as many practice areas that are sig diff. (around 800 when using ICB in the model, around 300 when using PCN).
+
+We think that the number of practice areas within each PCN is too low for the model assumptions and so we are going to stick with ICB as the random effect.
+
+### Rural/urban split
+
+**Original reasoning (2011 classification - no longer current, kept for context):**
+
+In the intial model A1 is the reference variable for the rural urban indicator. This has impacts on how we interpret the outputs of the model and how we phrase the takeaway messages.
+
+From the [ONS rural/urban classification user guide](https://www.ons.gov.uk/methodology/geography/geographicalproducts/ruralurbanclassifications/2011ruralurbanclassification), C1 is the most common category across the UK. However, within our dataset, the most common is A1, presumably because these areas are more built up and have a larger population so it would follow that there are more GP practices there.
+
+For now we will use C1, because I think being able to compare to the most common category in the UK is likely the most useful in terms of takeaway messaging.
+
+**Update - 2021 classification:**
+
+England's ONS rural/urban classification refreshed from the 2011 system (10 categories, e.g 'A1', 'C1') to the 2021 system (6 categories: 'UN1', 'UF1', 'RLN1', 'RLF1', 'RSN1', 'RSF1')
+
+Comparing against a common, representative category makes the clearest takeaway messaging. Cross-checking the new classification against the full national GP practice list: 'UN1' ('Urban: Nearer to a major town or city') accounts for roughly 78% of English GP practices, so it's used as the reference level below.
+
+```{r}
+#set reference level for ru21
+datscale <- datscale %>%
+  mutate(ru21ind = relevel(ru21ind, ref = "UN1"))
+
+#Model with random effect
+mod <- glmer(NumberScreened ~
+               IMD_scale + Prop_M_6074_scale + prop_6074_scale + 
+               listsize2020_scale + ru21ind + ethnic_whitebrit_perc_scale +
+               (1|ICB),
+               # (1|PCNName),
+             offset = log(NumberEligible), 
+             family = poisson, 
+             data = datscale,
+             nAGQ = 0,
+             glmerControl(optimizer = "bobyqa", 
+                          optCtrl = list(maxfun=2e9)))
+VarCorr(mod)
+
+```
+
+## Predicting screening via the model
+
+```{r}
+datscale$Expected <- predict(mod, type = "response")
+#Have to round because binom.confint require integer counts
+datscale$Expected <- round(datscale$Expected)
+```
+
+## Calculate CIs
+
+```{r}
+datscale <- datscale %>%
+  mutate(NumberScreened_LowerCI = binom.confint(datscale$NumberScreened,
+                                                datscale$NumberEligible, 
+                                                conf.level = 0.95, 
+                                                methods = "exact")$lower * NumberEligible,
+         NumberScreened_UpperCI = binom.confint(datscale$NumberScreened,
+                                                datscale$NumberEligible, 
+                                                conf.level = 0.95, 
+                                                methods = "exact")$upper * NumberEligible,
+         Expected_LowerCI = binom.confint(datscale$Expected,
+                                          datscale$NumberEligible, 
+                                          conf.level = 0.95, 
+                                          methods = "exact")$lower * NumberEligible,
+         Expected_UpperCI = binom.confint(datscale$Expected,
+                                          datscale$NumberEligible, 
+                                          conf.level = 0.95, 
+                                                methods = "exact")$upper * NumberEligible)
+```
+
+## Calculate the standardised screening ratio
+
+SSR = observed number screened / expected number screened. Above 1 means more people were screened than the model predicted for a practice with that population profile; below 1 means fewer.
+
+```{r}
+# Calculate point estimate for the ratio
+datscale <- datscale %>%
+  mutate(SSRatio = NumberScreened / Expected,
+         SSRatioLowerCI = NumberScreened_LowerCI / Expected_UpperCI,
+         SSRatioUpperCI = NumberScreened_UpperCI / Expected_LowerCI)
+```
+
+## Tidying up data
+
+```{r}
+# Adding calculated columns
+datscale <- datscale %>% 
+  mutate(IMD_decile = ntile(desc(IMD), 10),
+    IMD_quintile = ntile(desc(IMD), 5))
+
+datscale <- datscale %>% 
+  rename (OrganisationCode = OrgCode, 
+          OrganisationName = OrgName, 
+          gp_listsize = listsize2020) #%>% 
+
+# Creates a column with significance descriptions
+datscale <- datscale %>%
+  mutate(signif_change = case_when(SSRatioUpperCI < 1 ~ "lower",
+                                   SSRatioLowerCI > 1 ~ "higher",
+                                   .default = "similar")
+  ) %>%
+  arrange(ICB, OrganisationName)
+
+datscale$ICB <- format_icb(datscale$ICB)
+
+#Add coverage and pred coverage percentages
+datscale <- datscale %>%
+  mutate(Coverage = NumberScreened / NumberEligible,
+         PredictedCoverage = Expected / NumberEligible) %>%
+  group_by(ICB) %>%
+  #Calculate ICB coverage average for use in app graphs
+  mutate(ICBCoverageAvg = mean(NumberScreened)/mean(NumberEligible)) %>%
+  ungroup()
+```
+
+## Output
+
+```{r}
+# path for app data
+
+write_csv(datscale, "../data/processed/final_dataset.csv")
+```
+
+## Graphs (Exploratory/Diagnostic)
+
+These graphs are recreated from the old modelling script and have not been reviewed in detail.
+
+```{r}
+##### PLOTS ####
+library(ggplot2)
+library(ggthemes)
+library(extrafont)
+
+# Forest plot
+datS <- datscale[order(datscale$SSRatio),]
+datS$Index <- 1:dim(datS)[1]
+dd<- datS[datS$SSRatio !=0 & datS$SSRatioUpperCI<2.2,]
+Col <- rep(1,dim(dd)[1])
+Col[dd$SSRatioUpperCI < 1] <- "#009cee"
+Col[dd$SSRatioLowerCI > 1] <- "#ff0087"
+
+
+par(mfrow=c(1,1),mar=c(5,1,1,1))
+plot(Index~SSRatio,data=dd,pch=16,
+     xlim=c(0,2.1),cex=0.5,col=0,yaxt="n",xlab="standardised screening ratio (95% CI)",ylab="")
+
+for(j in 1:dim(dd)[1]){ lines(rep(dd$Index[j],2)~c(dd$SSRatioLowerCI[j],dd$SSRatioUpperCI[j]),col="grey")}
+
+abline(v=1,lty=2,lwd=2,col=1)
+
+points(Index~SSRatio,data=dd,pch=16,cex=0.5, col = Col)
+
+legend("topleft",c("SSR","95% CI", "Stat. sig. higher than expected",  "Stat. sig. lower than expected"),pch=c(16,NA, 16, 16),lty=c(NA,1, NA, NA),
+       
+       col=c("black","grey", "#ff0087", "#009cee"),bty="n")
+
+#Checks
+table(Col)
+(table(Col)/dim(dd)[1])*100
+
+
+boxplot(SSRatio ~ ruc21desc, data = dd, log = "y", outline = FALSE)$stat
+boxplot(NumberScreened ~ ruc21desc, data = dd, log = "y")$stat
+boxplot(Expected ~ ruc21desc, data = dd, log = "y")$stat
+table(dd$ruc21desc)
+
+par(mfrow = c(1,2))
+plot(Expected ~ IMD, data = dd, log = "y")
+plot(NumberScreened ~ IMD, data = dd, log = "y")
+
+par(mfrow = c(1,1))
+plot(Expected ~ NumberScreened, data = dd, log = "y")
+
+dd$ObserveRate = dd$NumberScreened / dd$NumberEligible
+plot((Expected/NumberEligible) ~ ObserveRate, data = dd, log = "xy")
+
+
+datscale <- datscale %>% 
+  mutate(pct_coverage = (NumberScreened / NumberEligible)*100)
+
+# IMD by coverage
+ggplot(datscale, aes(x = IMD, y = pct_coverage)) + 
+  geom_jitter(colour = "grey50", size = 3) +
+  theme(panel.background = element_blank(),
+        text = element_text(size = 16),
+        axis.line = element_line(), 
+        axis.title.y = element_text(face = "bold", margin = margin(t = 0, r = 10, b = 0, l = 0)), 
+        axis.title.x = element_text(face = "bold", margin = margin(t = 10, r = 0, b = 0, l = 0))) + 
+  ylim (0,100) +
+  ylab("Bowel screening coverage (%)")+
+  xlab ("IMD score (higher = more deprived)")
+
+cor(datscale$IMD, datscale$pct_coverage, method = c("pearson"))
+
+
+# Proportion of practice aged 60-74 by coverage
+ggplot(datscale, aes(x = prop_6074, y = pct_coverage)) + 
+  geom_jitter(colour = "grey50", size = 3) +
+  theme(panel.background = element_blank(),
+        text = element_text(size = 16),
+        axis.line = element_line(), 
+        axis.title.y = element_text(face = "bold", margin = margin(t = 0, r = 10, b = 0, l = 0)), 
+        axis.title.x = element_text(face = "bold", margin = margin(t = 10, r = 0, b = 0, l = 0))) + 
+  ylim(0,100) +
+  ylab("Bowel screening coverage (%)")+
+  xlab ("Proportion of practice population eligible for screening (%)")
+
+cor(datscale$prop_6074, datscale$pct_coverage, method = c("pearson"))
+
+
+# Proportion of local area residents that are White British
+ggplot(datscale, aes(x = ethnic_whitebrit_perc, y = pct_coverage)) + 
+  geom_jitter(colour = "grey50", size = 3) +
+  theme(panel.background = element_blank(),
+        text = element_text(size = 16),
+        axis.line = element_line(), 
+        axis.title.y = element_text(face = "bold", margin = margin(t = 0, r = 10, b = 0, l = 0)), 
+        axis.title.x = element_text(face = "bold", margin = margin(t = 10, r = 0, b = 0, l = 0))) + 
+  ylim(0,100) +
+  ylab("Bowel screening coverage (%)")+
+  xlab ("Proportion of local area residents that are White British (%)")
+
+cor(datscale$ethnic_whitebrit_perc, datscale$pct_coverage, method = c("pearson"))
+
+
+# Proportion of practice aged 60-74 that are male by coverage
+ggplot(datscale, aes(x = Prop_M_6074, y = pct_coverage)) + 
+  geom_jitter(colour = "grey50", size = 3) +
+  theme(panel.background = element_blank(),
+        text = element_text(size = 16),
+        axis.line = element_line(), 
+        axis.title.y = element_text(face = "bold", margin = margin(t = 0, r = 10, b = 0, l = 0)), 
+        axis.title.x = element_text(face = "bold", margin = margin(t = 10, r = 0, b = 0, l = 0))) + 
+  ylim(0,100) +
+  xlim(0,100) +
+  ylab("Bowel screening coverage (%)")+
+  xlab ("Proportion of eligible screening age group who are male (%)")
+
+cor(datscale$Prop_M_6074, datscale$pct_coverage, method = c("pearson"))
+
+# GP list size
+ggplot(Data, aes(x = log(listsize2020), y = pct_coverage)) + 
+  geom_jitter(colour = "grey50", size = 3) +
+  theme(panel.background = element_blank(),
+        text = element_text(size = 16),
+        axis.line = element_line(), 
+        axis.title.y = element_text(face = "bold", margin = margin(t = 0, r = 10, b = 0, l = 0)), 
+        axis.title.x = element_text(face = "bold", margin = margin(t = 10, r = 0, b = 0, l = 0))) + 
+  ylab("Bowel screening coverage (%)")+
+  xlab ("Log of Practice list size") 
+# +
+#   labs(title = "GP list size", tag = "E")
+
+Data <- Data %>% filter(!is.na(listsize2020)) 
+cor(log(Data$listsize2020), Data$pct_coverage, method = c("pearson"))
+
+# Rural Urban classification
+ru_class <- Data %>%
+  select(ru21ind, NumberScreened, NumberEligible) %>%
+  group_by(ru21ind) %>%
+  summarise(Screened_sum = sum(NumberScreened), 
+            Eligible_sum = sum(NumberEligible), 
+            pct_coverage = (Screened_sum / Eligible_sum)*100)
+
+ggplot(ru_class, aes(x = ru21ind, y = pct_coverage)) + 
+  geom_col(colour = "grey50") +
+  theme(panel.background = element_blank(),
+        text = element_text(size = 16),
+        axis.line = element_line(), 
+        axis.title.y = element_text(face = "bold", margin = margin(t = 0, r = 10, b = 0, l = 0)), 
+        axis.title.x = element_text(face = "bold", margin = margin(t = 10, r = 0, b = 0, l = 0))) + 
+  ylim(0,100) +
+  ylab ("Bowel screening coverage (%)")+
+  xlab ("Rural - Urban Classification")
+
+ggplot(datscale, aes(x = reorder(ruc21desc, desc(ruc21desc)) , y = pct_coverage)) + 
+  geom_boxplot() +
+  theme(panel.background = element_blank(),
+        text = element_text(size = 16),
+        axis.line = element_line(), 
+        axis.title.y = element_text(face = "bold", margin = margin(t = 0, r = 10, b = 0, l = 0)), 
+        axis.title.x = element_text(face = "bold", 
+                                    margin = margin(t = 10, r = 0, b = 0, l = 0))) + 
+  ylab ("Bowel screening coverage (%)")+
+  xlab ("") +
+ # xlab ("Rural - Urban Classification") + 
+  coord_flip() 
+```
+
+## Effect sizes
+
+```{r}
+#get coefficients from model
+coefficients <- fixef(mod)
+#transform to nicer df format
+coefficients <- data.frame(coeff = c(names(coefficients)),
+                             value = coefficients) %>%
+  pivot_wider(names_from = coeff,
+              values_from = value)
+
+model_vars <- datscale %>%
+  select(
+    OrganisationCode, OrganisationName, ICB,
+    NumberScreened, #outcome
+    IMD_scale, Prop_M_6074_scale, prop_6074_scale, listsize2020_scale, ru21ind, ethnic_whitebrit_perc_scale, #predictors
+    ICB, #random effect
+    NumberEligible) %>% #offset 
+  mutate(ru21ind = factor(ru21ind))
+
+#perform one hot encoding on rural/urban indicator
+one_hot_encoded <- model.matrix(~ ru21ind - 1, data = datscale)
+
+model_vars_encoded <- cbind(one_hot_encoded, model_vars %>% select(-ru21ind)) 
+
+# Calculate contributions
+contributions <- data.frame(
+  OrgCode = model_vars_encoded$OrganisationCode,
+  OrgName = model_vars_encoded$OrganisationName,
+  ICB = model_vars_encoded$ICB,
+  IMD_contr       = coefficients$IMD_scale                   * model_vars_encoded$IMD_scale,
+  PropM_contr     = coefficients$Prop_M_6074_scale           * model_vars_encoded$Prop_M_6074_scale,
+  Prop6074_contr  = coefficients$prop_6074_scale             * model_vars_encoded$prop_6074_scale,
+  listsize_contr  = coefficients$listsize2020_scale          * model_vars_encoded$listsize2020_scale,
+  ethnicity_contr = coefficients$ethnic_whitebrit_perc_scale * model_vars_encoded$ethnic_whitebrit_perc_scale,
+  # ru21UN1_contr    = coefficients$ru21indUN1                   * model_vars_encoded$ru21indUN1 # reference level, no coefficient,
+  ru21UF1_contr    = coefficients$ru21indUF1                   * model_vars_encoded$ru21indUF1,
+  ru21RLN1_contr    = coefficients$ru21indRLN1                   * model_vars_encoded$ru21indRLN1,
+  ru21RLF1_contr    = coefficients$ru21indRLF1                   * model_vars_encoded$ru21indRLF1,
+  ru21RSN1_contr    = coefficients$ru21indRSN1                   * model_vars_encoded$ru21indRSN1,
+  ru21RSF1_contr    = coefficients$ru21indRSF1                   * model_vars_encoded$ru21indRSF1
+)
+
+# make sure values are numeric
+contributions <- contributions %>%
+    mutate(intercept = coefficients["(Intercept)"][[1]]) #add intercept info back in
+
+
+contributions$ICB <- format_icb(contributions$ICB)
+
+# output all these values to use in the tool
+write_csv(contributions, '../data/processed/model_contributions.csv')
+```
+
+### Tests - (Exploratory/Diagnostic)
+
+Testing that the above code pulls out the appropriate contributions by working through predicting the number screened for a single GP practice area
+
+```{r}
+TestOrgCode <- "K82054"
+
+singleGP_contributions <- contributions %>%
+  filter(OrgCode == TestOrgCode) %>%
+  select(-OrgCode, -OrgName, -ICB) %>%
+  pivot_longer(cols = everything(), names_to = "factor", values_to = "Contribution")
+  
+  
+singleGP_ICB <- datscale %>%
+  filter(OrganisationCode == TestOrgCode) %>%
+  pull(ICB)
+
+singleGP_Eligible <- datscale %>%
+  filter(OrganisationCode == TestOrgCode) %>%
+  pull(NumberEligible)
+
+# Extract random effects
+random_effects <- ranef(mod)$ICB
+
+# Identify the random effect for the instance
+random_effect_instance <- random_effects[singleGP_ICB, ]
+
+# Calculate the linear predictor including the random effect and offset
+linear_predictor <- sum(singleGP_contributions$Contribution) + log(singleGP_Eligible) + random_effect_instance
+
+# Calculate the predicted value
+predicted_value <- exp(linear_predictor)
+
+# Print the predicted value (rounded because it is that way in the data and you can't have a decimal of a person...)
+round(predicted_value)
+
+chartdata <- singleGP_contributions %>%
+  filter(factor != "intercept") %>%
+  arrange(Contribution) %>% 
+  filter(Contribution != 0) %>%
+  mutate(colour = case_when(Contribution > 0 ~ '#3fb618',
+                            Contribution < 0 ~ '#dc3545',
+                            .default = "#bbc7d9"))
+
+plot_ly(chartdata) %>%
+  add_bars(y = ~factor, x = ~Contribution, marker = list(color = ~colour)) %>%
+  layout(yaxis = list(categoryorder = "array",
+                      categoryarray = chartdata$factor))
+```
+
+### Understanding the impact of the rural urban classifications (Exploratory/Diagnostic)
+
+This section looks at what the model estimates for each rural/urban category. Sparse vs not sparse appears to matter more than urban/rural.
+
+```{r}
+Coef_list <- coefficients %>%
+  pivot_longer(cols = everything(), names_to = "factor", values_to = "Contribution") %>%
+  filter(grepl("ru21", factor)) %>%
+  mutate(factor = str_remove(factor, "ru21ind"))
+  #the number in the ru21 indicator is sparse/not sparse and I want to order by that so swapping it round here
+  
+ruc21desc_table <- read_csv("../data/raw/ru21ind_desc.csv",
+                            show_col_types = FALSE) %>%
+  rename_all(function(x) gsub(" ", "", x))
+
+Coef_list <- Coef_list %>%
+  left_join(ruc21desc_table, join_by(factor == ru21ind))
+
+Coef_list <- Coef_list %>%
+  mutate(factor = paste0(substr(factor, 2, 2),
+                         substr(factor, 1, 1))) %>%
+  arrange(factor)
+  
+plot_ly(Coef_list) %>% add_bars(y = ~ ruc21desc, x = ~ Contribution)
+```
